@@ -384,16 +384,62 @@ function setTrack(main) {
 const ICON_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 5 L6 9 H3 v6 h3 l5 4 V5z"/><path d="M15.5 8.5 a4 4 0 0 1 0 7"/><path d="M18 6 a7 7 0 0 1 0 12"/></svg>`;
 const ICON_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 5 L6 9 H3 v6 h3 l5 4 V5z"/><path d="M22 9 L16 15 M16 9 L22 15"/></svg>`;
 function setMuteUI(on) { mBtn.hidden = false; mBtn.innerHTML = on ? ICON_ON : ICON_OFF; mBtn.style.opacity = on ? 1 : .55; mBtn.setAttribute('aria-label', on ? 'Mute music' : 'Unmute music'); mBtn.setAttribute('aria-pressed', String(!on)); }
+let musicRetryTimer = 0, shlokaFadeDone = false;
+function clearMusicRetry() {
+  if (musicRetryTimer) { clearTimeout(musicRetryTimer); musicRetryTimer = 0; }
+  shloka.removeEventListener('canplay', onMusicCanPlay);
+  shloka.removeEventListener('canplaythrough', onMusicCanPlay);
+}
+function onMusicCanPlay() { if (musicOn && (shloka.paused || shloka.ended)) tryStartShloka(true); }
+function onShlokaPlaying() {
+  clearMusicRetry();
+  musicOn = true; setMuteUI(true);
+  if (!shlokaFadeDone) { shlokaFadeDone = true; ramp(shloka, ducked ? .22 : VOL, 900); music.preload = 'auto'; try { music.load(); } catch (_) { } }
+}
+function tryStartShloka(fromEvent) {
+  if (!musicOn) return;
+  if (!shloka.paused && !shloka.ended) { onShlokaPlaying(); return; }
+  shloka.muted = false;
+  const p = shloka.play();
+  if (p && p.then) p.then(onShlokaPlaying).catch(() => { if (!fromEvent && musicOn) {/* timed retry continues */} });
+}
+function scheduleMusicRetry(attempt) {
+  clearMusicRetry();
+  if (!musicOn) return;
+  if (attempt > 4) { if (shloka.paused || shloka.ended) { musicOn = false; setMuteUI(false); } return; }
+  const delays = [0, 280, 700, 1400, 2200];
+  const run = () => {
+    if (!musicOn) return;
+    if (!shloka.paused && !shloka.ended) { onShlokaPlaying(); return; }
+    const p = shloka.play();
+    if (p && p.then) {
+      p.then(onShlokaPlaying).catch(() => { musicRetryTimer = setTimeout(() => scheduleMusicRetry(attempt + 1), 0); });
+    } else {
+      musicRetryTimer = setTimeout(() => scheduleMusicRetry(attempt + 1), 0);
+    }
+  };
+  if (delays[attempt] === 0) run();
+  else musicRetryTimer = setTimeout(run, delays[attempt]);
+  shloka.addEventListener('canplay', onMusicCanPlay);
+  shloka.addEventListener('canplaythrough', onMusicCanPlay);
+}
 function startMusic() {
-  musicOn = true; setMuteUI(true); $('#shareBtn').hidden = false;
+  musicOn = true; shlokaFadeDone = false; setMuteUI(true); $('#shareBtn').hidden = false;
   shloka.muted = false; shloka.volume = 0;
-  let kicked = false;
-  const begin = () => { if (kicked) return; kicked = true; const p = shloka.play(); if (p && p.then) p.then(() => { ramp(shloka, VOL, 900); music.preload = 'auto'; try { music.load(); } catch (_) { } }).catch(() => { kicked = false; musicOn = false; setMuteUI(false); }); };
-  begin();
-  if (shloka.readyState < 2) { const go = () => { shloka.removeEventListener('canplay', go); shloka.removeEventListener('canplaythrough', go); begin(); }; shloka.addEventListener('canplay', go); shloka.addEventListener('canplaythrough', go); try { shloka.load(); } catch (_) { } }
+  try { if (shloka.readyState < 2) shloka.load(); } catch (_) { }
+  scheduleMusicRetry(0);
 }
 
-mBtn.addEventListener('click', () => { const el = cur(); if (musicOn) { musicOn = false; music.pause(); shloka.pause(); setMuteUI(false); } else { musicOn = true; el.volume = ducked ? .22 : VOL; const p = el.play(); if (p && p.catch) p.catch(() => { }); setMuteUI(true); } });
+mBtn.addEventListener('click', () => {
+  const el = cur();
+  if (musicOn) {
+    musicOn = false; clearMusicRetry(); music.pause(); shloka.pause(); setMuteUI(false);
+  } else {
+    musicOn = true; shlokaFadeDone = el !== shloka || shlokaFadeDone; el.volume = ducked ? .22 : VOL; setMuteUI(true);
+    const p = el.play();
+    if (p && p.then) p.then(() => { if (el === shloka) onShlokaPlaying(); }).catch(() => { if (el === shloka) scheduleMusicRetry(0); });
+  }
+});
 shloka.addEventListener('error', () => { if (!onMain) setTrack(true); });
 music.addEventListener('error', () => {/* keep mute control visible even if a track fails */ });
 const HOTEL = 'Hotel Sagar View, Galu, Barsar, Distt. Hamirpur, Himachal Pradesh', HOME = 'V.P.O. Kanoh, Ward No. 3, Tehsil Barsar, Distt. Hamirpur, Himachal Pradesh';
