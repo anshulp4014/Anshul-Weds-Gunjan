@@ -298,11 +298,14 @@ function setTrack(main){if(!musicOn||main===onMain)return;onMain=main;
  const on=main?music:shloka,off=main?shloka:music;
  on.volume=0;const p=on.play();if(p&&p.catch)p.catch(()=>{});
  ramp(on,ducked?.22:VOL,1800);ramp(off,0,1800);}
-function startMusic(){musicOn=true;shloka.volume=0;const p=shloka.play();if(p&&p.then)p.then(()=>{mBtn.hidden=false;ramp(shloka,VOL,2500);}).catch(()=>{});$('#shareBtn').hidden=false;}
+const ICON_ON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 5 L6 9 H3 v6 h3 l5 4 V5z"/><path d="M15.5 8.5 a4 4 0 0 1 0 7"/><path d="M18 6 a7 7 0 0 1 0 12"/></svg>`;
+const ICON_OFF=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 5 L6 9 H3 v6 h3 l5 4 V5z"/><path d="M22 9 L16 15 M16 9 L22 15"/></svg>`;
+function setMuteUI(on){mBtn.hidden=false;mBtn.innerHTML=on?ICON_ON:ICON_OFF;mBtn.style.opacity=on?1:.55;mBtn.setAttribute('aria-label',on?'Mute music':'Unmute music');mBtn.setAttribute('aria-pressed',String(!on));}
+function startMusic(){musicOn=true;setMuteUI(true);$('#shareBtn').hidden=false;shloka.volume=0;const p=shloka.play();if(p&&p.then)p.then(()=>ramp(shloka,VOL,2500)).catch(()=>{musicOn=false;setMuteUI(false);});}
 
-mBtn.addEventListener('click',()=>{const el=cur();if(musicOn){musicOn=false;music.pause();shloka.pause();mBtn.style.opacity=.55;mBtn.setAttribute('aria-label','Play music');}else{musicOn=true;el.volume=ducked?.22:VOL;el.play();mBtn.style.opacity=1;mBtn.setAttribute('aria-label','Pause music');}});
+mBtn.addEventListener('click',()=>{const el=cur();if(musicOn){musicOn=false;music.pause();shloka.pause();setMuteUI(false);}else{musicOn=true;el.volume=ducked?.22:VOL;const p=el.play();if(p&&p.catch)p.catch(()=>{});setMuteUI(true);}});
 shloka.addEventListener('error',()=>{if(!onMain)setTrack(true);});
-music.addEventListener('error',()=>{mBtn.hidden=true;});
+music.addEventListener('error',()=>{/* keep mute control visible even if a track fails */});
 const HOTEL='Hotel Sagar View, Galu, Barsar, Distt. Hamirpur, Himachal Pradesh',HOME='V.P.O. Kanoh, Ward No. 3, Tehsil Barsar, Distt. Hamirpur, Himachal Pradesh';
 const EVS=[['Ladies Sangeet','2026-12-10T13:30Z',1,HOME],['Cocktail · DJ Night · Dine','2026-12-10T14:00Z',3.5,HOME],['Lunch','2026-12-11T07:00Z',2,HOME],['Sehra Bandi','2026-12-11T10:30Z',2,HOME],['Departure of Barat','2026-12-11T12:30Z',1,HOME],['Vadhu Pravesh','2026-12-12T02:30Z',1.5,HOME],['Dhaam','2026-12-12T07:00Z',3,HOME]];
 const fmt=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
